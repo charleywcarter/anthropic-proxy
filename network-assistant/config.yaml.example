@@ -1,0 +1,38 @@
+# Network Assistant Configuration
+# Copy to config.yaml and fill in your values
+
+# Seed switches - the discovery starts from these devices
+seed_devices:
+  - host: 192.168.1.1
+    # Optional per-device credentials (overrides defaults)
+    # username: admin
+    # password: cisco
+    # device_type: cisco_ios
+
+# Default credentials used for all devices unless overridden
+defaults:
+  username: admin
+  password: cisco
+  secret: cisco          # enable secret (optional)
+  device_type: cisco_ios # netmiko device type
+  timeout: 30
+  # SSH key auth (optional, overrides password)
+  # key_file: ~/.ssh/id_rsa
+
+# Discovery settings
+discovery:
+  max_hops: 10           # how many hops from seed to crawl (0 = seed only)
+  protocols:
+    - cdp
+    - lldp
+  # Only discover devices matching these IP prefixes (empty = allow all)
+  allowed_prefixes: []
+  # Exclude these IPs from discovery
+  excluded_ips: []
+  # Max concurrent SSH sessions
+  max_workers: 5
+
+# Web UI settings
+web:
+  host: 0.0.0.0
+  port: 5000

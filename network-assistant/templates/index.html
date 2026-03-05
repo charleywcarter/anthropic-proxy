@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Topology Assistant</title>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --accent: #e94560;
+    --accent2: #0ea5e9;
+    --text: #e0e0e0;
+    --text-dim: #8899aa;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ──────────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--surface2);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent2);
+    white-space: nowrap;
+  }
+  header .controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent2);
+    color: #fff;
+  }
+  .btn-primary:hover { filter: brightness(1.15); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  .btn-secondary:hover { filter: brightness(1.2); }
+  .btn-danger {
+    background: var(--accent);
+    color: #fff;
+  }
+  .status-badge {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: var(--surface2);
+  }
+  .status-badge.running {
+    background: var(--accent2);
+    color: #fff;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* ── Main layout ─────────────────────────────────── */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────── */
+  .sidebar {
+    width: 340px;
+    min-width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--surface2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .sidebar .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--surface2);
+  }
+  .sidebar .tab {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+  }
+  .sidebar .tab.active {
+    color: var(--accent2);
+    border-bottom-color: var(--accent2);
+  }
+  .tab-content {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+  }
+  .tab-content.active { display: flex; flex-direction: column; gap: 10px; }
+
+  /* ── Config tab ──────────────────────────────────── */
+  .form-group { margin-bottom: 10px; }
+  .form-group label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .form-group input, .form-group select {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--surface2);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .seed-entry {
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 10px;
+    position: relative;
+  }
+  .seed-entry .remove-seed {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: none;
+    border: none;
+    color: var(--error);
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  /* ── Device list ─────────────────────────────────── */
+  .device-card {
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    transition: border 0.15s;
+    border: 1px solid transparent;
+  }
+  .device-card:hover { border-color: var(--accent2); }
+  .device-card .dev-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent2);
+  }
+  .device-card .dev-ip { font-size: 12px; color: var(--text-dim); }
+  .device-card .dev-platform { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .device-card .dev-status {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+  .dev-status.ok { background: var(--success); }
+  .dev-status.err { background: var(--error); }
+  .dev-status.unpolled { background: var(--warning); }
+
+  /* ── Logs ────────────────────────────────────────── */
+  .log-panel {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+  .log-panel .log-line { white-space: pre-wrap; word-break: break-all; }
+
+  /* ── Topology canvas ─────────────────────────────── */
+  .topology-container {
+    flex: 1;
+    position: relative;
+    background: var(--bg);
+  }
+  #topology {
+    width: 100%;
+    height: 100%;
+  }
+  .topo-legend {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    display: flex;
+    gap: 12px;
+    opacity: 0.9;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  /* ── Detail overlay ──────────────────────────────── */
+  .detail-overlay {
+    display: none;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 320px;
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 10;
+  }
+  .detail-overlay.visible { display: block; }
+  .detail-overlay h3 {
+    color: var(--accent2);
+    margin-bottom: 8px;
+    font-size: 16px;
+  }
+  .detail-overlay .close-btn {
+    position: absolute; top: 10px; right: 12px;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 18px; cursor: pointer;
+  }
+  .detail-table {
+    width: 100%;
+    font-size: 12px;
+  }
+  .detail-table td {
+    padding: 3px 0;
+    vertical-align: top;
+  }
+  .detail-table td:first-child {
+    color: var(--text-dim);
+    width: 100px;
+    font-weight: 500;
+  }
+  .neighbor-list {
+    margin-top: 10px;
+    font-size: 12px;
+  }
+  .neighbor-list h4 {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .neighbor-item {
+    background: var(--bg);
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Network Topology Assistant</h1>
+  <div class="controls">
+    <button class="btn btn-primary" id="btnDiscover" onclick="startDiscovery()">Discover Network</button>
+    <button class="btn btn-secondary" onclick="fitTopology()">Fit View</button>
+    <button class="btn btn-secondary" onclick="exportTopology()">Export JSON</button>
+    <span class="status-badge" id="statusBadge">Idle</span>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="tabs">
+      <button class="tab active" data-tab="config" onclick="switchTab('config')">Config</button>
+      <button class="tab" data-tab="devices" onclick="switchTab('devices')">Devices</button>
+      <button class="tab" data-tab="logs" onclick="switchTab('logs')">Logs</button>
+    </div>
+
+    <!-- Config Tab -->
+    <div class="tab-content active" id="tab-config">
+      <h3 style="font-size:14px; color:var(--text-dim);">Default Credentials</h3>
+      <div class="form-group">
+        <label>Username</label>
+        <input id="defUsername" value="admin" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input id="defPassword" type="password" />
+      </div>
+      <div class="form-group">
+        <label>Enable Secret</label>
+        <input id="defSecret" type="password" />
+      </div>
+      <div class="form-group">
+        <label>Device Type</label>
+        <select id="defDeviceType">
+          <option value="cisco_ios">Cisco IOS</option>
+          <option value="cisco_xe">Cisco IOS-XE</option>
+          <option value="cisco_nxos">Cisco NX-OS</option>
+          <option value="arista_eos">Arista EOS</option>
+        </select>
+      </div>
+
+      <h3 style="font-size:14px; color:var(--text-dim); margin-top:10px;">Seed Devices</h3>
+      <div id="seedList"></div>
+      <button class="btn btn-secondary" style="width:100%; margin-top:6px;" onclick="addSeed()">+ Add Seed Device</button>
+      <button class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="saveConfig()">Save Configuration</button>
+    </div>
+
+    <!-- Devices Tab -->
+    <div class="tab-content" id="tab-devices">
+      <div id="deviceList"><span style="color:var(--text-dim); font-size:13px;">No devices discovered yet.</span></div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div class="tab-content" id="tab-logs">
+      <div class="log-panel" id="logPanel"></div>
+    </div>
+  </div>
+
+  <!-- Topology Map -->
+  <div class="topology-container">
+    <div id="topology"></div>
+    <div class="topo-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--success)"></div> Polled</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--warning)"></div> Discovered</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--error)"></div> Error</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div> Selected</div>
+    </div>
+    <div class="detail-overlay" id="detailOverlay">
+      <button class="close-btn" onclick="closeDetail()">&times;</button>
+      <h3 id="detailHostname"></h3>
+      <table class="detail-table">
+        <tr><td>IP Address</td><td id="detailIP"></td></tr>
+        <tr><td>Platform</td><td id="detailPlatform"></td></tr>
+        <tr><td>Software</td><td id="detailSoftware"></td></tr>
+        <tr><td>Serial</td><td id="detailSerial"></td></tr>
+        <tr><td>Status</td><td id="detailStatus"></td></tr>
+      </table>
+      <div class="neighbor-list">
+        <h4>Connected Links</h4>
+        <div id="detailNeighbors"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let topology = { devices: {}, links: [] };
+let network = null;
+let nodes = null;
+let edges = null;
+let pollInterval = null;
+let logOffset = 0;
+
+// ── Icons (SVG data URLs) ──────────────────────────────────────────────────
+function deviceIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+    <rect x="4" y="12" width="40" height="24" rx="3" fill="${color}" opacity="0.15" stroke="${color}" stroke-width="2"/>
+    <line x1="12" y1="20" x2="36" y2="20" stroke="${color}" stroke-width="1.5" opacity="0.6"/>
+    <line x1="12" y1="28" x2="36" y2="28" stroke="${color}" stroke-width="1.5" opacity="0.6"/>
+    <circle cx="34" cy="20" r="2" fill="${color}"/>
+    <circle cx="34" cy="28" r="2" fill="${color}"/>
+    <line x1="16" y1="36" x2="16" y2="42" stroke="${color}" stroke-width="2"/>
+    <line x1="32" y1="36" x2="32" y2="42" stroke="${color}" stroke-width="2"/>
+    <line x1="24" y1="12" x2="24" y2="6" stroke="${color}" stroke-width="2"/>
+  </svg>`;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
+// ── Topology Rendering ────────────────────────────────────────────────────
+function initNetwork() {
+  const container = document.getElementById("topology");
+  nodes = new vis.DataSet();
+  edges = new vis.DataSet();
+
+  const options = {
+    nodes: {
+      shape: "image",
+      size: 30,
+      font: { color: "#e0e0e0", size: 12, face: "Segoe UI, system-ui, sans-serif", strokeWidth: 3, strokeColor: "#1a1a2e" },
+      borderWidth: 0,
+    },
+    edges: {
+      color: { color: "#334466", highlight: "#0ea5e9", hover: "#0ea5e9" },
+      width: 2,
+      font: { color: "#8899aa", size: 9, face: "monospace", strokeWidth: 2, strokeColor: "#1a1a2e", align: "top" },
+      smooth: { type: "continuous" },
+    },
+    physics: {
+      solver: "forceAtlas2Based",
+      forceAtlas2Based: {
+        gravitationalConstant: -80,
+        centralGravity: 0.01,
+        springLength: 160,
+        springConstant: 0.04,
+        damping: 0.4,
+      },
+      stabilization: { iterations: 200 },
+    },
+    interaction: {
+      hover: true,
+      tooltipDelay: 200,
+      zoomView: true,
+      dragView: true,
+    },
+  };
+
+  network = new vis.Network(container, { nodes, edges }, options);
+
+  network.on("click", function (params) {
+    if (params.nodes.length > 0) {
+      showDeviceDetail(params.nodes[0]);
+    } else {
+      closeDetail();
+    }
+  });
+}
+
+function getNodeColor(dev) {
+  if (dev.error) return "#ef4444";
+  if (dev.polled) return "#10b981";
+  return "#f59e0b";
+}
+
+function updateTopologyView() {
+  const devs = topology.devices;
+  const lnks = topology.links;
+
+  // Build node set
+  const nodeIds = new Set();
+  for (const [ip, dev] of Object.entries(devs)) {
+    const id = dev.hostname || ip;
+    nodeIds.add(id);
+    const color = getNodeColor(dev);
+    const existing = nodes.get(id);
+    const nodeData = {
+      id: id,
+      label: id + "\n" + ip,
+      image: deviceIcon(color),
+      title: `${dev.hostname} (${ip})\n${dev.platform}\n${dev.software}`,
+    };
+    if (existing) {
+      nodes.update(nodeData);
+    } else {
+      nodes.add(nodeData);
+    }
+  }
+
+  // Build edge set
+  const edgeMap = {};
+  for (const link of lnks) {
+    const edgeId = [link.local_device, link.remote_device].sort().join("--");
+    if (!edgeMap[edgeId]) {
+      edgeMap[edgeId] = {
+        id: edgeId,
+        from: link.local_device,
+        to: link.remote_device,
+        label: link.local_interface + " ↔ " + link.remote_interface,
+        title: `${link.local_device}:${link.local_interface} ↔ ${link.remote_device}:${link.remote_interface}\nProtocol: ${link.protocol}`,
+      };
+    }
+  }
+  for (const [eid, edata] of Object.entries(edgeMap)) {
+    const existing = edges.get(eid);
+    if (existing) {
+      edges.update(edata);
+    } else {
+      edges.add(edata);
+    }
+  }
+
+  // Update device list
+  updateDeviceList();
+}
+
+function updateDeviceList() {
+  const container = document.getElementById("deviceList");
+  const devs = topology.devices;
+  if (!Object.keys(devs).length) {
+    container.innerHTML = '<span style="color:var(--text-dim);font-size:13px;">No devices discovered yet.</span>';
+    return;
+  }
+  let html = "";
+  for (const [ip, dev] of Object.entries(devs)) {
+    const statusClass = dev.error ? "err" : dev.polled ? "ok" : "unpolled";
+    html += `
+      <div class="device-card" onclick="focusDevice('${dev.hostname || ip}')">
+        <div><span class="dev-status ${statusClass}"></span><span class="dev-name">${dev.hostname}</span></div>
+        <div class="dev-ip">${ip}</div>
+        <div class="dev-platform">${dev.platform || "Unknown platform"}${dev.error ? " — " + dev.error : ""}</div>
+      </div>`;
+  }
+  container.innerHTML = html;
+}
+
+function showDeviceDetail(nodeId) {
+  // Find device by hostname
+  let dev = null;
+  let devIp = "";
+  for (const [ip, d] of Object.entries(topology.devices)) {
+    if ((d.hostname || ip) === nodeId) {
+      dev = d;
+      devIp = ip;
+      break;
+    }
+  }
+  if (!dev) return;
+
+  document.getElementById("detailHostname").textContent = dev.hostname;
+  document.getElementById("detailIP").textContent = devIp;
+  document.getElementById("detailPlatform").textContent = dev.platform || "—";
+  document.getElementById("detailSoftware").textContent = dev.software || "—";
+  document.getElementById("detailSerial").textContent = dev.serial || "—";
+  document.getElementById("detailStatus").textContent = dev.error || (dev.polled ? "Polled OK" : "Discovered (not polled)");
+
+  // Find links for this device
+  const nbHtml = topology.links
+    .filter(l => l.local_device === nodeId || l.remote_device === nodeId)
+    .map(l => {
+      const isLocal = l.local_device === nodeId;
+      const peer = isLocal ? l.remote_device : l.local_device;
+      const localIntf = isLocal ? l.local_interface : l.remote_interface;
+      const remoteIntf = isLocal ? l.remote_interface : l.local_interface;
+      return `<div class="neighbor-item">${localIntf} ↔ ${peer} (${remoteIntf}) <span style="color:var(--text-dim)">[${l.protocol}]</span></div>`;
+    })
+    .join("");
+  document.getElementById("detailNeighbors").innerHTML = nbHtml || "<div style='color:var(--text-dim)'>No links</div>";
+
+  document.getElementById("detailOverlay").classList.add("visible");
+  network.selectNodes([nodeId]);
+}
+
+function closeDetail() {
+  document.getElementById("detailOverlay").classList.remove("visible");
+  if (network) network.unselectAll();
+}
+
+function focusDevice(nodeId) {
+  if (network) {
+    network.focus(nodeId, { scale: 1.2, animation: { duration: 500, easingFunction: "easeInOutQuad" } });
+    network.selectNodes([nodeId]);
+    showDeviceDetail(nodeId);
+  }
+}
+
+function fitTopology() {
+  if (network) network.fit({ animation: { duration: 500 } });
+}
+
+// ── Tabs ────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+  document.querySelector(`.tab[data-tab="${tab}"]`).classList.add("active");
+  document.getElementById("tab-" + tab).classList.add("active");
+}
+
+// ── Seed Management ────────────────────────────────────────────────────────
+let seeds = [];
+
+function renderSeeds() {
+  const container = document.getElementById("seedList");
+  container.innerHTML = seeds.map((s, i) => `
+    <div class="seed-entry">
+      <button class="remove-seed" onclick="removeSeed(${i})">&times;</button>
+      <div class="form-group">
+        <label>Host / IP</label>
+        <input value="${s.host}" onchange="seeds[${i}].host=this.value" placeholder="192.168.1.1" />
+      </div>
+    </div>`).join("");
+}
+
+function addSeed() {
+  seeds.push({ host: "" });
+  renderSeeds();
+}
+
+function removeSeed(i) {
+  seeds.splice(i, 1);
+  renderSeeds();
+}
+
+// ── Config ──────────────────────────────────────────────────────────────────
+async function saveConfig() {
+  const validSeeds = seeds.filter(s => s.host.trim());
+  if (!validSeeds.length) {
+    alert("Add at least one seed device.");
+    return;
+  }
+  const body = {
+    seeds: validSeeds,
+    defaults: {
+      username: document.getElementById("defUsername").value,
+      password: document.getElementById("defPassword").value,
+      secret: document.getElementById("defSecret").value,
+      device_type: document.getElementById("defDeviceType").value,
+    },
+  };
+  const res = await fetch("/api/config/seeds", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    alert("Configuration saved. " + data.seed_count + " seed(s) configured.");
+  } else {
+    alert("Error: " + (data.error || "Unknown error"));
+  }
+}
+
+// ── Discovery ───────────────────────────────────────────────────────────────
+async function startDiscovery() {
+  // Auto-save config first
+  const validSeeds = seeds.filter(s => s.host.trim());
+  if (!validSeeds.length) {
+    alert("Add at least one seed device before discovering.");
+    switchTab("config");
+    return;
+  }
+  await saveConfig();
+
+  const res = await fetch("/api/discover", { method: "POST" });
+  const data = await res.json();
+  if (!res.ok) {
+    alert("Error: " + (data.error || "Unknown"));
+    return;
+  }
+  document.getElementById("btnDiscover").disabled = true;
+  logOffset = 0;
+  switchTab("logs");
+  startPolling();
+}
+
+function startPolling() {
+  if (pollInterval) return;
+  updateStatus();
+  pollInterval = setInterval(async () => {
+    await updateStatus();
+  }, 1500);
+}
+
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
+async function updateStatus() {
+  try {
+    // Fetch topology
+    const topoRes = await fetch("/api/topology");
+    const topoData = await topoRes.json();
+    topology = topoData;
+    updateTopologyView();
+
+    // Fetch logs
+    const logRes = await fetch("/api/logs?since=" + logOffset);
+    const logData = await logRes.json();
+    if (logData.messages.length > 0) {
+      const panel = document.getElementById("logPanel");
+      for (const msg of logData.messages) {
+        const line = document.createElement("div");
+        line.className = "log-line";
+        line.textContent = msg;
+        panel.appendChild(line);
+      }
+      panel.scrollTop = panel.scrollHeight;
+      logOffset = logData.total;
+    }
+
+    // Update status badge
+    const badge = document.getElementById("statusBadge");
+    const btn = document.getElementById("btnDiscover");
+    if (topoData.running) {
+      badge.textContent = "Discovering...";
+      badge.className = "status-badge running";
+      btn.disabled = true;
+    } else {
+      const devCount = Object.keys(topology.devices).length;
+      badge.textContent = devCount ? `${devCount} device(s)` : "Idle";
+      badge.className = "status-badge";
+      btn.disabled = false;
+      stopPolling();
+    }
+  } catch (e) {
+    console.error("Poll error:", e);
+  }
+}
+
+function exportTopology() {
+  const blob = new Blob([JSON.stringify(topology, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "topology.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+window.addEventListener("load", () => {
+  initNetwork();
+  addSeed();  // Start with one empty seed input
+  // Load existing config if any
+  fetch("/api/config").then(r => r.json()).then(cfg => {
+    if (cfg.defaults) {
+      if (cfg.defaults.username) document.getElementById("defUsername").value = cfg.defaults.username;
+      if (cfg.defaults.device_type) document.getElementById("defDeviceType").value = cfg.defaults.device_type;
+    }
+    if (cfg.seed_devices && cfg.seed_devices.length) {
+      seeds = cfg.seed_devices.map(s => ({ host: s.host || "" }));
+      renderSeeds();
+    }
+  }).catch(() => {});
+  // Check if a discovery is already running
+  fetch("/api/topology").then(r => r.json()).then(data => {
+    if (data.running) {
+      topology = data;
+      updateTopologyView();
+      startPolling();
+    } else if (Object.keys(data.devices || {}).length) {
+      topology = data;
+      updateTopologyView();
+    }
+  }).catch(() => {});
+});
+</script>
+</body>
+</html>

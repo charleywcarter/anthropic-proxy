@@ -13,9 +13,9 @@ set -e
 #   - Kijai's WanVideoWrapper (best Wan integration)
 #   - Wan 2.2 TI2V-5B model (text+image to video, optimized for 24GB)
 #   - Wan 2.2 14B FP8 models (high+low noise experts, for quality runs)
-#   - Flux 2 Klein 4B (fast image generation + editing, fits 24GB)
+#   - Flux 2 Klein 9B Q8 GGUF (best image gen + editing, ~14GB VRAM)
 #   - UMT5-XXL text encoder (FP8)
-#   - Qwen3-4B text encoder (for Flux 2 Klein)
+#   - Qwen3-8B text encoder GGUF (for Flux 2 Klein 9B)
 #   - Wan 2.1 VAE + Flux VAE
 #   - CivitAI integration nodes
 # =============================================================================
@@ -94,6 +94,15 @@ else
     cd Civicomfy && git pull --quiet && cd ..
 fi
 
+# ComfyUI-GGUF (required to load GGUF quantized models like Flux 2 Klein 9B)
+if [ ! -d "ComfyUI-GGUF" ]; then
+    git clone --quiet https://github.com/city96/ComfyUI-GGUF.git
+    pip install --quiet -r ComfyUI-GGUF/requirements.txt
+else
+    cd ComfyUI-GGUF && git pull --quiet && cd ..
+    pip install --quiet -r ComfyUI-GGUF/requirements.txt
+fi
+
 echo "  Done."
 
 # --- Step 5: Create model directories ---
@@ -159,18 +168,18 @@ download_model \
     "$MODELS_DIR/clip_vision/clip_vision_h.safetensors" \
     "CLIP Vision H (for I2V)"
 
-# --- Flux 2 Klein 4B (image generation + editing, fits 24GB) ---
-# Note: 9B needs ~29GB, won't fit on 4090. 4B fits comfortably at ~13GB.
+# --- Flux 2 Klein 9B Q8 GGUF (image generation + editing, ~14GB VRAM) ---
+# Q8 quantization: near-identical to full precision, fits easily on 4090.
 download_model \
-    "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/flux2-klein-4B.safetensors" \
-    "$MODELS_DIR/diffusion_models/flux2-klein-4B.safetensors" \
-    "Flux 2 Klein 4B"
+    "https://huggingface.co/unsloth/FLUX.2-klein-9B-GGUF/resolve/main/FLUX.2-klein-9B-Q8_0.gguf" \
+    "$MODELS_DIR/diffusion_models/FLUX.2-klein-9B-Q8_0.gguf" \
+    "Flux 2 Klein 9B (Q8 GGUF)"
 
-# Qwen3-4B Text Encoder (required for Flux 2 Klein 4B)
+# Qwen3-8B Text Encoder GGUF (required for Flux 2 Klein 9B - must match GGUF format)
 download_model \
-    "https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/resolve/main/qwen3_4b_fp16.safetensors" \
-    "$MODELS_DIR/text_encoders/qwen3_4b_fp16.safetensors" \
-    "Qwen3-4B Text Encoder (for Flux 2 Klein)"
+    "https://huggingface.co/unsloth/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q8_0.gguf" \
+    "$MODELS_DIR/text_encoders/Qwen3-8B-Q8_0.gguf" \
+    "Qwen3-8B Text Encoder (Q8 GGUF, for Flux 2 Klein 9B)"
 
 # Flux VAE (shared across Flux models)
 download_model \
@@ -193,15 +202,16 @@ echo ""
 echo "  Models installed:"
 echo "    - Wan 2.2 TI2V-5B (FP16) - text+image to video, 720p"
 echo "    - Wan 2.2 14B MoE (FP8)  - higher quality, slower"
-echo "    - Flux 2 Klein 4B         - fast image gen + editing"
+echo "    - Flux 2 Klein 9B (Q8)    - best image gen + editing"
 echo "    - UMT5-XXL text encoder   - for Wan models"
-echo "    - Qwen3-4B text encoder   - for Flux 2 Klein"
+echo "    - Qwen3-8B text encoder   - for Flux 2 Klein 9B"
 echo "    - Wan 2.1 VAE + Flux VAE"
 echo "    - CLIP Vision H"
 echo ""
 echo "  Custom nodes:"
 echo "    - ComfyUI Manager"
 echo "    - Kijai WanVideoWrapper"
+echo "    - ComfyUI-GGUF (GGUF loader)"
 echo "    - CivitAI Nodes (official)"
 echo "    - Civicomfy (model browser)"
 echo ""
